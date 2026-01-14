@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Upload, Brain, FileText, Code, Sparkles, Zap, Database, Settings } from 'lucide-react';
+import { Send, Upload, Brain, FileText, Code, Sparkles, Zap, Database, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NeuralNetwork } from '@/components/NeuralNetwork';
@@ -8,34 +8,23 @@ import { DocumentCard } from '@/components/DocumentCard';
 import { UploadZone } from '@/components/UploadZone';
 import { CodeAnalysis } from '@/components/CodeAnalysis';
 import { StatCard } from '@/components/StatCard';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-interface Document {
-  id: string;
-  name: string;
-  type: 'document' | 'code';
-  size: string;
-  status: 'processing' | 'learned' | 'pending';
-}
+import { useNeuralChat } from '@/hooks/useNeuralChat';
+import { useDocuments } from '@/hooks/useDocuments';
 
 const Index = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Olá! Sou a Neural.AI. Envie documentos para me ensinar, e eu poderei responder perguntas sobre eles, analisar códigos e sugerir melhorias. Meus neurônios estão prontos para aprender!'
-    }
-  ]);
   const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isLearning, setIsLearning] = useState(false);
-  const [learningProgress, setLearningProgress] = useState(0);
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [activeTab, setActiveTab] = useState('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const { messages, isTyping, sendMessage, clearMessages } = useNeuralChat();
+  const { 
+    documents, 
+    isLearning, 
+    learningProgress, 
+    addDocuments, 
+    removeDocument,
+    getLearnedDocuments 
+  } = useDocuments();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,83 +35,19 @@ const Index = () => {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!inputValue.trim()) return;
-
-    const userMessage: Message = { role: 'user', content: inputValue };
-    setMessages(prev => [...prev, userMessage]);
+    if (!inputValue.trim() || isTyping) return;
+    const learnedDocs = getLearnedDocuments();
+    await sendMessage(inputValue, learnedDocs);
     setInputValue('');
-    setIsTyping(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = [
-        'Analisando os dados dos seus documentos... Com base no que aprendi, posso dizer que esse tópico está relacionado às informações na seção 3 do documento principal.',
-        'Interessante pergunta! Consultando minha base de conhecimento... Encontrei informações relevantes nos documentos que você enviou.',
-        'De acordo com os documentos que processei, posso explicar isso em detalhes. A informação principal está no arquivo que você enviou anteriormente.',
-        'Baseado no meu aprendizado dos seus documentos, essa questão pode ser respondida considerando múltiplos fatores que identifiquei.',
-      ];
-      
-      const response = responses[Math.floor(Math.random() * responses.length)];
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-      setIsTyping(false);
-    }, 1500);
   };
 
-  const handleFilesSelected = (files: File[]) => {
-    const newDocs: Document[] = files.map((file, index) => {
-      const codeExtensions = ['.js', '.ts', '.tsx', '.jsx', '.py', '.java', '.cpp'];
-      const isCode = codeExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
-      
-      return {
-        id: `doc-${Date.now()}-${index}`,
-        name: file.name,
-        type: isCode ? 'code' : 'document',
-        size: `${(file.size / 1024).toFixed(1)} KB`,
-        status: 'processing' as const
-      };
-    });
-
-    setDocuments(prev => [...prev, ...newDocs]);
-    simulateLearning(newDocs);
+  const handleFilesSelected = async (files: File[]) => {
+    await addDocuments(files);
   };
 
-  const simulateLearning = (newDocs: Document[]) => {
-    setIsLearning(true);
-    setLearningProgress(0);
-
-    const interval = setInterval(() => {
-      setLearningProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsLearning(false);
-          
-          // Mark documents as learned
-          setDocuments(current => 
-            current.map(doc => 
-              newDocs.find(d => d.id === doc.id) 
-                ? { ...doc, status: 'learned' as const }
-                : doc
-            )
-          );
-          
-          // Add learning complete message
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `✨ Processo de aprendizado concluído! Absorvi ${newDocs.length} novo(s) documento(s). Agora posso responder perguntas sobre: ${newDocs.map(d => d.name).join(', ')}`
-          }]);
-          
-          return 100;
-        }
-        return prev + 2;
-      });
-    }, 50);
-  };
-
-  const removeDocument = (id: string) => {
-    setDocuments(prev => prev.filter(doc => doc.id !== id));
-  };
-
-  const mockIssues = [
+  const mockIssues = documents
+    .filter(d => d.type === 'code' && d.status === 'learned')
+    .length > 0 ? [
     {
       type: 'duplicate' as const,
       title: 'Função duplicada detectada',
@@ -143,7 +68,9 @@ const Index = () => {
       description: 'A variável "tempData" é declarada mas nunca utilizada no escopo.',
       line: 23
     }
-  ];
+  ] : [];
+
+  const learnedCount = documents.filter(d => d.status === 'learned').length;
 
   return (
     <div className="min-h-screen bg-background flex flex-col lg:flex-row">
@@ -158,7 +85,9 @@ const Index = () => {
               <h1 className="font-display text-xl font-bold text-foreground text-glow-cyan">
                 NEURAL.AI
               </h1>
-              <p className="text-xs text-muted-foreground font-mono">v2.0.0 • Rede Ativa</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                {isLearning ? 'Processando...' : 'v2.0.0 • Rede Ativa'}
+              </p>
             </div>
           </div>
         </div>
@@ -177,13 +106,13 @@ const Index = () => {
           <StatCard
             icon={Database}
             label="Documentos"
-            value={documents.filter(d => d.status === 'learned').length}
+            value={learnedCount}
             color="cyan"
           />
           <StatCard
             icon={Zap}
             label="Neurônios"
-            value="2.4K"
+            value={`${(2.4 + learnedCount * 0.2).toFixed(1)}K`}
             color="purple"
           />
         </div>
@@ -238,13 +167,24 @@ const Index = () => {
               {/* Chat Input */}
               <div className="border-t border-border/50 p-4 bg-card/30">
                 <div className="flex gap-3">
+                  <Button
+                    onClick={clearMessages}
+                    variant="outline"
+                    size="icon"
+                    className="border-border/50 hover:border-primary/50 hover:bg-primary/10"
+                    title="Limpar conversa"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
                   <div className="flex-1 relative">
                     <input
                       type="text"
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                      placeholder="Pergunte algo sobre seus documentos..."
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                      placeholder={learnedCount > 0 
+                        ? "Pergunte algo sobre seus documentos..." 
+                        : "Envie documentos primeiro para fazer perguntas..."}
                       className="w-full bg-muted/30 border border-border/50 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all font-mono text-sm"
                     />
                   </div>
@@ -257,7 +197,9 @@ const Index = () => {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 text-center font-mono">
-                  Envie documentos na aba "Ensinar" para expandir meu conhecimento
+                  {learnedCount > 0 
+                    ? `${learnedCount} documento(s) na base de conhecimento`
+                    : 'Envie documentos na aba "Ensinar" para expandir meu conhecimento'}
                 </p>
               </div>
             </TabsContent>
@@ -286,7 +228,10 @@ const Index = () => {
                       {documents.map((doc) => (
                         <DocumentCard
                           key={doc.id}
-                          {...doc}
+                          name={doc.name}
+                          type={doc.type}
+                          size={doc.size}
+                          status={doc.status}
                           onRemove={() => removeDocument(doc.id)}
                         />
                       ))}
@@ -308,7 +253,7 @@ const Index = () => {
                   </p>
                 </div>
 
-                {documents.filter(d => d.type === 'code').length > 0 ? (
+                {documents.filter(d => d.type === 'code' && d.status === 'learned').length > 0 ? (
                   <CodeAnalysis 
                     fileName="projeto/src/utils.ts" 
                     issues={mockIssues}
