@@ -1,5 +1,8 @@
 import { cn } from '@/lib/utils';
 import { Bot, User } from 'lucide-react';
+import { useMemo } from 'react';
+import { parseGeneratedFiles } from '@/lib/parseGeneratedFiles';
+import { GeneratedFileCard } from './GeneratedFileCard';
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
@@ -9,6 +12,11 @@ interface ChatMessageProps {
 
 export function ChatMessage({ role, content, isTyping }: ChatMessageProps) {
   const isUser = role === 'user';
+
+  const parsedContent = useMemo(() => {
+    if (isUser) return { text: content, files: [] };
+    return parseGeneratedFiles(content);
+  }, [content, isUser]);
 
   return (
     <div className={cn(
@@ -39,7 +47,7 @@ export function ChatMessage({ role, content, isTyping }: ChatMessageProps) {
         </div>
         
         <div className="text-foreground/90 whitespace-pre-wrap">
-          {content}
+          {parsedContent.text}
           {isTyping && (
             <span className="inline-flex gap-1 ml-2">
               <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -48,6 +56,14 @@ export function ChatMessage({ role, content, isTyping }: ChatMessageProps) {
             </span>
           )}
         </div>
+
+        {parsedContent.files.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {parsedContent.files.map((file, index) => (
+              <GeneratedFileCard key={`${file.filename}-${index}`} file={file} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
