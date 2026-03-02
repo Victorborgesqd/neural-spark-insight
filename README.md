@@ -1,8 +1,12 @@
-# Welcome to your Lovable project
+# NEURAL.AI - Assistente Inteligente de Documentos
 
-## Project info
+[![Acessar Aplicação](https://img.shields.io/badge/🚀_Acessar_App-Neural.AI-00d4ff?style=for-the-badge)](https://neural-spark-insight.lovable.app)
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+> **[▶ Clique aqui para abrir a aplicação](https://neural-spark-insight.lovable.app)**
+
+## Sobre o Projeto
+
+Neural.AI é uma plataforma de IA que permite enviar documentos, aprender com eles e interagir via chat inteligente com análise de código integrada.
 
 ## How can I edit this code?
 
